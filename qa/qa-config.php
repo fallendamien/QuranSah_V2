@@ -121,7 +121,7 @@
 	containing wp-load.php. You do not need to set the QA_MYSQL_* constants above since these
 	will be taken from WordPress automatically. See online documentation for more details.
 
-	define('QA_WORDPRESS_INTEGRATE_PATH', '\xampp\htdocs\QuranSah_V2\');
+	define('QA_WORDPRESS_INTEGRATE_PATH', 'C:/xampp/htdocs/QuranSah_V2/');
 */
 
 /*

@@ -25,7 +25,7 @@
 		exit;
 	}
 
-	define('QA_DB_VERSION_CURRENT', 59);
+	define('QA_DB_VERSION_CURRENT', 58);
 
 
 	function qa_db_user_column_type_verify()
@@ -1428,13 +1428,7 @@
 					$keyrecalc['dorecalcpoints'] = true;
 					break;
 
-			//	Up to here: Verison 1.7
-
-				case 59:
-					// Upgrade from alpha version removed
-					break;
-
-			//	Up to here: Verison 1.7.1
+			//	Up to here: Verison 1.7 beta
 
 			}
 

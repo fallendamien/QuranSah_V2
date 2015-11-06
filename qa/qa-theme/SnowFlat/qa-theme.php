@@ -34,25 +34,43 @@
  */
 class qa_html_theme extends qa_html_theme_base
 {
-	// theme subdirectories
-	private $js_dir = 'js';
-	private $icon_url = 'images/icons';
+	/**
+	 * @since Snow 1.4
+	 * @param type $template
+	 * @param type $content
+	 * @param type $rooturl
+	 * @param type $request
+	 */
+	public function __construct($template, $content, $rooturl, $request)
+	{
+		parent::__construct($template, $content, $rooturl, $request);
 
-	private $fixed_topbar = false;
-	private $welcome_widget_class = 'wet-asphalt';
-	private $ask_search_box_class = 'turquoise';
-	// Size of the user avatar in the navigation bar
-	private $nav_bar_avatar_size = 32;
+		// theme subdirectories
+		$this->js_dir = 'js/';
+		$this->img_url = 'images/';
+		$this->icon_url = $this->img_url . 'icons/';
+
+		/**
+		 * Below condition only loads the require class if Q2A set
+		 * the Snow theme as site theme.
+		 * If you change the theme name from `Snow` to anything, make sure to
+		 * change in below condition
+		 */
+		if (qa_opt('site_theme') === 'SnowFlat') {
+			require_once('inc/qam-snow-theme.php');
+		}
+	}
 
 	/**
 	 * Adding aditional meta for responsive design
 	 *
 	 * @since Snow 1.4
+	 * @global type $qam_snow
 	 */
 	public function head_metas()
 	{
 		$this->output('<meta name="viewport" content="width=device-width, initial-scale=1"/>');
-		parent::head_metas();
+		qa_html_theme_base::head_metas();
 	}
 
 	/**
@@ -69,7 +87,7 @@ class qa_html_theme extends qa_html_theme_base
 		// add Ubuntu font CSS file
 		$this->content['css_src'][] = 'http://fonts.googleapis.com/css?family=Ubuntu:400,700,400italic,700italic';
 
-		parent::head_css();
+		qa_html_theme_base::head_css();
 
 		// output some dynamic CSS inline
 		$this->head_inline_css();
@@ -82,62 +100,86 @@ class qa_html_theme extends qa_html_theme_base
 	 */
 	public function head_script()
 	{
-		$jsUrl = $this->rooturl . $this->js_dir . '/snow-core.js?' . QA_VERSION;
+		$jsUrl = $this->rooturl . $this->js_dir . 'snow-core.js?' . QA_VERSION;
 		$this->content['script'][] = '<script src="' . $jsUrl . '"></script>';
 
-		parent::head_script();
+		qa_html_theme_base::head_script();
 	}
 
 	/**
 	 * Adding point count for logged in user
 	 *
 	 * @since Snow 1.4
+	 * @global array $qam_snow
 	 */
 	public function logged_in()
 	{
-		parent::logged_in();
-		if (qa_is_logged_in()) {
-			$userpoints = qa_get_logged_in_points();
-			$pointshtml = $userpoints == 1
-				? qa_lang_html_sub('main/1_point', '1', '1')
-				: qa_html(number_format($userpoints))
-			;
-			$this->output('<div class="qam-logged-in-points">' . $pointshtml . '</div>');
-		}
+		global $qam_snow;
+		qa_html_theme_base::logged_in();
+
+		$this->output($qam_snow->headers['user_points']);
 	}
 
 	/**
-	 * Adding body class dynamically. Override needed to add class on admin/approve-users page
+	 * Adding sidebar for mobile device
 	 *
 	 * @since Snow 1.4
 	 */
+	public function body()
+	{
+		if (qa_is_mobile_probably()) {
+
+			$this->output('<div id="qam-sidepanel-toggle"><i class="icon-left-open-big"></i></div>');
+			$this->output('<div id="qam-sidepanel-mobile">');
+			qa_html_theme_base::sidepanel();
+			$this->output('</div>');
+		}
+		qa_html_theme_base::body();
+	}
+
+	/**
+	 * Adding body class dynamically
+	 *
+	 * override to add class on admin/approve-users page
+	 *
+	 * @since Snow 1.4
+	 * @return string body class
+	 */
 	public function body_tags()
 	{
+		global $qam_snow;
+
 		$class = 'qa-template-' . qa_html($this->template);
 
 		if (isset($this->content['categoryids'])) {
 			foreach ($this->content['categoryids'] as $categoryid)
+			{
 				$class .= ' qa-category-' . qa_html($categoryid);
+			}
 		}
 
 		// add class if admin/appovoe-users page
-		if ($this->template === 'admin' && qa_request_part(1) === 'approve')
+		if (($this->template === 'admin') && (qa_request_part(1) === 'approve')) {
 			$class .= ' qam-approve-users';
+		}
 
-		if ($this->fixed_topbar)
-			$class .= ' qam-body-fixed';
+		if (isset($qam_snow->fixed_topbar))
+			$class .= ' qam-body-' . $qam_snow->fixed_topbar;
 
 		$this->output('class="' . $class . ' qa-body-js-off"');
 	}
 
 	/**
-	 * Login form for user dropdown menu.
+	 * login form
 	 *
 	 * @since Snow 1.4
+	 * @global array $qam_snow
 	 */
 	public function nav_user_search()
 	{
 		// outputs login form if user not logged in
+		global $qam_snow;
+
 		$this->output('<div class="qam-account-items-wrapper">');
 
 		$this->qam_user_account();
@@ -148,18 +190,19 @@ class qa_html_theme extends qa_html_theme_base
 			if (isset($this->content['navigation']['user']['login']) && !QA_FINAL_EXTERNAL_USERS) {
 				$login = $this->content['navigation']['user']['login'];
 				$this->output(
-					'<form action="' . $login['url'] . '" method="post">',
-						'<input type="text" name="emailhandle" dir="auto" placeholder="' . trim(qa_lang_html(qa_opt('allow_login_email_only') ? 'users/email_label' : 'users/email_handle_label'), ':') . '"/>',
-						'<input type="password" name="password" dir="auto" placeholder="' . trim(qa_lang_html('users/password_label'), ':') . '"/>',
-						'<div><input type="checkbox" name="remember" id="qam-rememberme" value="1"/>',
-						'<label for="qam-rememberme">' . qa_lang_html('users/remember') . '</label></div>',
-						'<input type="hidden" name="code" value="' . qa_html(qa_get_form_security_code('login')) . '"/>',
-						'<input type="submit" value="' . $login['label'] . '" class="qa-form-tall-button qa-form-tall-button-login" name="dologin"/>',
-					'</form>'
+						'<!--[Begin: login form]-->',
+						'<form id="qa-loginform" action="' . $login['url'] . '" method="post">',
+						'<input type="text" id="qa-userid" name="emailhandle" placeholder="' . trim(qa_lang_html('users/email_handle_label'), ':') . '" />',
+						'<input type="password" id="qa-password" name="password" placeholder="' . trim(qa_lang_html('users/password_label'), ':') . '" />',
+						'<div id="qa-rememberbox"><input type="checkbox" name="remember" id="qa-rememberme" value="1" />',
+						'<label for="qa-rememberme" id="qa-remember">' . qa_lang_html('users/remember') . '</label></div>',
+						'<input type="hidden" name="code" value="' . qa_html(qa_get_form_security_code('login')) . '" />',
+						'<input type="submit" value="' . $login['label'] . '" id="qa-login" name="dologin" />',
+						'</form>',
+						'<!--[End: login form]-->'
 				);
 
-				// remove regular navigation link to log in page
-				unset($this->content['navigation']['user']['login']);
+				unset($this->content['navigation']['user']['login']); // removes regular navigation link to log in page
 			}
 		}
 
@@ -169,7 +212,7 @@ class qa_html_theme extends qa_html_theme_base
 	}
 
 	/**
-	 * Modify markup for topbar.
+	 * modifying markup for topbar
 	 *
 	 * @since Snow 1.4
 	 */
@@ -185,7 +228,7 @@ class qa_html_theme extends qa_html_theme_base
 	}
 
 	/**
-	 * Remove the '-' from the note for the category page (notes).
+	 * The method has been overridden to remove the '-' from the note for the category page (notes).
 	 *
 	 * @since Snow 1.4
 	 * @param type $navlink
@@ -198,6 +241,7 @@ class qa_html_theme extends qa_html_theme_base
 			$replace = array(' <', '> ');
 			$navlink['note'] = str_replace($search, $replace, $navlink['note']);
 		}
+
 		parent::nav_link($navlink, $class);
 	}
 
@@ -240,14 +284,15 @@ class qa_html_theme extends qa_html_theme_base
 	 */
 	public function header()
 	{
-		$class = $this->fixed_topbar ? ' fixed' : '';
+		global $qam_snow;
 
+		$class = isset($qam_snow->fixed_topbar) ? ' ' . $qam_snow->fixed_topbar : '';
 		$this->output('<div id="qam-topbar" class="clearfix' . $class . '">');
 
 		$this->nav_main_sub();
-		$this->output('</div> <!-- END qam-topbar -->');
+		$this->output('</div><!-- END qam-topbar -->');
 
-		$this->output($this->ask_button());
+		$this->output($qam_snow->headers['ask_button']);
 		$this->qam_search('the-top', 'the-top-search');
 	}
 
@@ -258,14 +303,19 @@ class qa_html_theme extends qa_html_theme_base
 	 */
 	public function footer()
 	{
+		// to replace standard Q2A footer
+		global $qam_snow;
+		//$qam_snow->footer_custom_content = '';
+		
+		$this->output($qam_snow->footer_custom_content);
 		$this->output('<div class="qam-footer-box">');
 
 		$this->output('<div class="qam-footer-row">');
 		$this->widgets('full', 'bottom');
 		$this->output('</div> <!-- END qam-footer-row -->');
 
-		parent::footer();
-		$this->output('</div> <!-- END qam-footer-box -->');
+		qa_html_theme_base::footer();
+		$this->output('</div> <!-- END qam-footer-box -->', '');
 	}
 
 	/**
@@ -275,36 +325,37 @@ class qa_html_theme extends qa_html_theme_base
 	 */
 	public function sidepanel()
 	{
-		// remove sidebar for user profile pages
-		if ($this->template == 'user')
-			return;
-
-		$this->output('<div id="qam-sidepanel-toggle"><i class="icon-left-open-big"></i></div>');
-		$this->output('<div class="qa-sidepanel" id="qam-sidepanel-mobile">');
-		$this->qam_search();
-		$this->widgets('side', 'top');
-		$this->sidebar();
-		$this->widgets('side', 'high');
-		$this->nav('cat', 1);
-		$this->widgets('side', 'low');
-		if (isset($this->content['sidepanel']))
-			$this->output_raw($this->content['sidepanel']);
-		$this->feed();
-		$this->widgets('side', 'bottom');
-		$this->output('</div>', '');
+		// removes sidebar for user profile pages
+		if (($this->template != 'user') && !qa_is_mobile_probably()) {
+			$this->output('<div class="qa-sidepanel">');
+			$this->qam_search();
+			$this->widgets('side', 'top');
+			$this->sidebar();
+			$this->widgets('side', 'high');
+			$this->nav('cat', 1);
+			$this->widgets('side', 'low');
+			if (isset($this->content['sidepanel']))
+				$this->output_raw($this->content['sidepanel']);
+			$this->feed();
+			$this->widgets('side', 'bottom');
+			$this->output('</div>', '');
+		}
 	}
 
 	/**
-	 * Allow alternate sidebar color.
+	 * To provide various color option
 	 *
 	 * @since Snow 1.4
+	 * @global array $qam_snow
 	 */
 	public function sidebar()
 	{
+		global $qam_snow;
+
 		if (isset($this->content['sidebar'])) {
 			$sidebar = $this->content['sidebar'];
 			if (!empty($sidebar)) {
-				$this->output('<div class="qa-sidebar ' . $this->welcome_widget_class . '">');
+				$this->output('<div class="qa-sidebar wet-asphalt ' . $qam_snow->welcome_widget_color . '">');
 				$this->output_raw($sidebar);
 				$this->output('</div>', '');
 			}
@@ -312,29 +363,22 @@ class qa_html_theme extends qa_html_theme_base
 	}
 
 	/**
-	 * Add close icon
+	 * To add close icon
 	 *
 	 * @since Snow 1.4
 	 * @param array $q_item
 	 */
 	public function q_item_title($q_item)
 	{
-		$closedText = qa_lang('main/closed');
-		$imgHtml = empty($q_item['closed'])
-			? ''
-			: '<img src="' . $this->rooturl . $this->icon_url . '/closed-q-list.png" class="qam-q-list-close-icon" alt="' . $closedText . '" title="' . $closedText . '"/>';
-
 		$this->output(
-			'<div class="qa-q-item-title">',
-			// add closed note in title
-			$imgHtml,
-			'<a href="' . $q_item['url'] . '">' . $q_item['title'] . '</a>',
-			'</div>'
+				'<div class="qa-q-item-title">',
+				// add closed note in title
+				empty($q_item['closed']) ? '' : '<img src="' . $this->rooturl . $this->icon_url . '/closed-q-list.png" class="qam-q-list-close-icon" alt="question-closed" title="' . qa_lang('main/closed') . '" />', '<a href="' . $q_item['url'] . '">' . $q_item['title'] . '</a>', '</div>'
 		);
 	}
 
 	/**
-	 * Add RSS feeds icon and closed icon for closed questions
+	 * To add RSS feeds icon and closed icon for closed questions
 	 *
 	 * @since Snow 1.4
 	 */
@@ -353,34 +397,29 @@ class qa_html_theme extends qa_html_theme_base
 		$url = isset($q_view['url']) ? $q_view['url'] : false;
 
 		// add closed image
-		$closedText = qa_lang('main/closed');
-		$imgHtml = empty($q_view['closed'])
-			? ''
-			: '<img src="' . $this->rooturl . $this->icon_url . '/closed-q-view.png" class="qam-q-view-close-icon" alt="' . $closedText . '" width="24" height="24" title="' . $closedText . '"/>';
+		$closed = (!empty($q_view['closed']) ?
+						'<img src="' . $this->rooturl . $this->icon_url . '/closed-q-view.png" class="qam-q-view-close-icon" alt="question-closed" width="24" height="24" title="' . qa_lang('main/closed') . '" />' : null );
 
 		if (isset($this->content['title'])) {
 			$this->output(
-				$imgHtml,
-				$url ? '<a href="' . $url . '">' : '',
-				$this->content['title'],
-				$url ? '</a>' : ''
+					$closed, $url ? '<a href="' . $url . '">' : '', $this->content['title'], $url ? '</a>' : ''
 			);
 		}
 	}
 
 	/**
-	 * Add view counter to question list
+	 * To add view counter
 	 *
 	 * @since Snow 1.4
 	 * @param array $q_item
 	 */
 	public function q_item_stats($q_item)
-	{
+	{ // add view count to question list
 		$this->output('<div class="qa-q-item-stats">');
 
 		$this->voting($q_item);
 		$this->a_count($q_item);
-		parent::view_count($q_item);
+		qa_html_theme_base::view_count($q_item);
 
 		$this->output('</div>');
 	}
@@ -391,10 +430,12 @@ class qa_html_theme extends qa_html_theme_base
 	 * @since Snow 1.4
 	 * @param type $q_item
 	 */
-	public function view_count($q_item) {}
+	public function view_count($q_item)
+	{ // Prevent display view counter on usual place
+	}
 
 	/**
-	 * Add view counter to question view
+	 * To add view counter
 	 *
 	 * @since Snow 1.4
 	 * @param type $q_view
@@ -405,13 +446,13 @@ class qa_html_theme extends qa_html_theme_base
 
 		$this->voting($q_view);
 		$this->a_count($q_view);
-		parent::view_count($q_view);
+		qa_html_theme_base::view_count($q_view);
 
 		$this->output('</div>');
 	}
 
 	/**
-	 * Modify user whometa, move to top
+	 * To modify user whometa, move to top
 	 *
 	 * @since Snow 1.4
 	 * @param type $q_view
@@ -445,7 +486,7 @@ class qa_html_theme extends qa_html_theme_base
 	}
 
 	/**
-	 * Move user whometa to top in answer
+	 * To move user whometa to top in answer
 	 *
 	 * @since Snow 1.4
 	 * @param type $a_item
@@ -460,21 +501,16 @@ class qa_html_theme extends qa_html_theme_base
 			$this->output('<form ' . $a_item['main_form_tags'] . '>'); // form for buttons on answer
 
 		if ($a_item['hidden'])
-			$answerState = 'hidden';
+			$this->output('<div class="qa-a-item-hidden">');
 		elseif ($a_item['selected'])
-			$answerState = 'selected';
-		else
-			$answerState = null;
-
-		if (isset($answerState))
-			$this->output('<div class="qa-a-item-' . $answerState . '">');
+			$this->output('<div class="qa-a-item-selected">');
 
 		$this->a_selection($a_item);
 		if (isset($a_item['error']))
 			$this->error($a_item['error']);
 		$this->a_item_content($a_item);
 
-		if (isset($answerState))
+		if ($a_item['hidden'] || $a_item['selected'])
 			$this->output('</div>');
 
 		$this->a_item_buttons($a_item);
@@ -494,7 +530,7 @@ class qa_html_theme extends qa_html_theme_base
 	}
 
 	/**
-	 * Move user whometa to top in comment
+	 * To move user whometa to top in comment
 	 *
 	 * @since Snow 1.4
 	 * @param type $c_item
@@ -523,16 +559,18 @@ class qa_html_theme extends qa_html_theme_base
 	 * I'd really appreciate you displaying this link on your Q2A site. Thank you - Jatin
 	 *
 	 * @since Snow 1.4
+	 * @global array $qam_snow
 	 */
 	public function attribution()
 	{
 		// floated right
 		$this->output(
 			'<div class="qa-attribution">',
-			'Snow Theme by <a href="http://www.q2amarket.com">Q2A Market</a>',
+			'Copyright &copy; '.date('Y').' '.$this->content['site_title'].' - All rights reserved.',
 			'</div>'
 		);
-		parent::attribution();
+
+		//qa_html_theme_base::attribution();
 	}
 
 	/**
@@ -544,13 +582,16 @@ class qa_html_theme extends qa_html_theme_base
 	 */
 	private function qam_user_account()
 	{
+		$avatarsize = 32;
+
+		// get logged-in user avatar
 		if (qa_is_logged_in()) {
-			// get logged-in user avatar
 			$handle = qa_get_logged_in_user_field('handle');
 			$toggleClass = 'qam-logged-in';
 
-			if (QA_FINAL_EXTERNAL_USERS)
-				$tobar_avatar = qa_get_external_avatar_html(qa_get_logged_in_user_field('userid'), $this->nav_bar_avatar_size, true);
+			if (QA_FINAL_EXTERNAL_USERS) {
+				$tobar_avatar = qa_get_external_avatar_html( qa_get_logged_in_user_field('userid'), $avatarsize, true );
+			}
 			else {
 				$tobar_avatar = qa_get_user_avatar_html(
 					qa_get_logged_in_user_field('flags'),
@@ -559,15 +600,15 @@ class qa_html_theme extends qa_html_theme_base
 					qa_get_logged_in_user_field('avatarblobid'),
 					qa_get_logged_in_user_field('avatarwidth'),
 					qa_get_logged_in_user_field('avatarheight'),
-					$this->nav_bar_avatar_size,
+					$avatarsize,
 					false
 				);
 			}
 
 			$auth_icon = strip_tags($tobar_avatar, '<img>');
 		}
+		// display login icon and label
 		else {
-			// display login icon and label
 			$handle = $this->content['navigation']['user']['login']['label'];
 			$toggleClass = 'qam-logged-out';
 			$auth_icon = '<i class="icon-key qam-auth-key"></i>';
@@ -583,16 +624,18 @@ class qa_html_theme extends qa_html_theme_base
 	}
 
 	/**
-	 * Add search-box wrapper with extra class for color scheme
+	 * To add search-box wrapper with extra class for color scheme
 	 *
 	 * @since Snow 1.4
 	 * @version 1.0
 	 */
-	private function qam_search($addon_class = null, $ids = null)
+	private function qam_search($addon_class = false, $ids = false)
 	{
-		$id = isset($ids) ? ' id="' . $ids . '"' : '';
+		$default_color = 'turquoise';
 
-		$this->output('<div class="qam-search ' . $this->ask_search_box_class . ' ' . $addon_class . '"' . $id . '>');
+		$id = (($ids) ? ' id="' . $ids . '"' : null);
+
+		$this->output('<div class="qam-search ' . $default_color . ' ' . $addon_class . '" ' . $id . ' >');
 		$this->search();
 		$this->output('</div>');
 	}
@@ -609,8 +652,9 @@ class qa_html_theme extends qa_html_theme_base
 	{
 		$css = array('<style>');
 
-		if (!qa_is_logged_in())
+		if (!qa_is_logged_in()) {
 			$css[] = '.qa-nav-user { margin: 0 !important; }';
+		}
 
 		if (qa_request_part(1) !== qa_get_logged_in_handle()) {
 			$css[] = '@media (max-width: 979px) {';
@@ -622,31 +666,48 @@ class qa_html_theme extends qa_html_theme_base
 			$css[] = '}';
 		}
 
+		// sidebar styles for desktop (must use server-side UA detection, not media queries)
+		if (!qa_is_mobile_probably()) {
+			$css[] = '.qa-sidepanel { width: 25%; padding: 0px; float: right; overflow: hidden; *zoom: 1; }';
+		}
+
 		$css[] = '</style>';
 
 		$this->output_array($css);
 	}
 
 	/**
-	 * Custom ask button for medium and small screen
+	 * Question2Answer system icons info bar
 	 *
-	 * @access private
 	 * @since Snow 1.4
-	 * @version 1.0
-	 * @return string Ask button html markup
+	 * @return string Info icons HTML
 	 */
-	private function ask_button()
+	private function icons_info()
 	{
-		return
-			'<div class="qam-ask-search-box">' .
-			'<div class="qam-ask-mobile">' .
-			'<a href="' . qa_path('ask', null, qa_path_to_root()) . '" class="' . $this->ask_search_box_class . '">' .
-			qa_lang_html('main/nav_ask') .
-			'</a>' .
-			'</div>' .
-			'<div class="qam-search-mobile ' . $this->ask_search_box_class . '" id="qam-search-mobile">' .
-			'</div>' .
-			'</div>';
-	}
+		$icons = array(
+			'answer',
+			'comment',
+			'hide',
+			'reshow',
+			'close',
+			'reopen',
+			'flag',
+			'unflag',
+			'edit',
+			'delete',
+			'approve',
+			'reject',
+			'reply',
+		);
 
+		$icons_info = '<div class="qam-icons-info">';
+
+		foreach ($icons as $icon) {
+			$label = ucwords(qa_lang_html('question/' . $icon . '_button'));
+			$icons_info .= '<div class="qam-icon-item"><span class="' . $icon . '"></span> ' . $label . '</div>';
+		}
+		$icons_info .= '</div> <!-- END qam-icons-info -->';
+
+		return $icons_info;
+	}
 }
